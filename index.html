@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ACTL – IPL Contest Tracker</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0a0e1a;color:#f1f5f9;font-family:'Inter',sans-serif;min-height:100vh;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-thumb{background:#334155;border-radius:4px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const { createClient } = supabase;
+const sb = createClient(
+  "https://tvjasppkyudctqqhxfqd.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR2amFzcHBreXVkY3RxcWh4ZnFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMzQ4MzcsImV4cCI6MjA5MDYxMDgzN30.6E7Mu2agJ9i_-VYn52vcdWHJdIZee5_ksIFCg_Dq1d8"
+);
+
+const ADMIN = { username: "Pramod", password: "annachatanna" };
+const C = {
+  bg:"#0a0e1a", surface:"#111827", card:"#1a2236",
+  accent:"#f59e0b", accent2:"#ef4444", blue:"#3b82f6",
+  green:"#10b981", text:"#f1f5f9", muted:"#94a3b8", border:"#1e293b",
+};
+
+const { useState, useEffect, useCallback } = React;
+
+function sortUsers(users) {
+  return [...users].sort((a,b) => {
+    const la=a.losses||0, lb=b.losses||0;
+    if(la!==lb) return la-lb;
+    const wa=a.wins||0, wb=b.wins||0;
+    if(wa!==wb) return wb-wa;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function Spinner() {
+  return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:40}}>
+      <div style={{width:32,height:32,border:`3px solid ${C.border}`,borderTop:`3px solid ${C.accent}`,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+    </div>
+  );
+}
+
+function QualifierTab({ users }) {
+  const sorted = sortUsers(users);
+  const top4 = sorted.slice(0,4);
+  const medalColors = ["#f59e0b","#94a3b8","#cd7f32","#3b82f6"];
+  const medalLabels = ["1st","2nd","3rd","4th"];
+  const p = (i) => top4[i]?.name || `Player ${i+1}`;
+  const has4 = top4.length >= 4;
+  const W=560,H=600,BW=150,BH=54,cQ1=90,cQ2=310,cFinal=460,yQ1=80,yEL=280,yQ2=180,yFinal=310;
+
+  const Box = ({x,y,label,sub1,sub2,color,tag}) => {
+    const bx=x-BW/2, by=y-BH/2;
+    return (
+      <g>
+        <rect x={bx} y={by} width={BW} height={BH} rx="10" fill="#1a2236" stroke={color} strokeWidth="1.5"/>
+        <rect x={bx} y={by} width={36} height={BH} rx="10" fill={color} opacity="0.9"/>
+        <rect x={bx+26} y={by} width={10} height={BH} fill={color} opacity="0.9"/>
+        <text x={bx+18} y={y+1} textAnchor="middle" dominantBaseline="middle" fontSize="11" fontWeight="700" fontFamily="Rajdhani,sans-serif" fill={color==="#f59e0b"?"#000":"#fff"}>{tag}</text>
+        <text x={bx+98} y={y-10} textAnchor="middle" dominantBaseline="middle" fontSize="12" fontWeight="700" fontFamily="Rajdhani,sans-serif" fill="#f1f5f9">{label}</text>
+        <text x={bx+98} y={y+8} textAnchor="middle" dominantBaseline="middle" fontSize="9.5" fontFamily="Inter,sans-serif" fill="#94a3b8">{sub1}</text>
+        {sub2 && <text x={bx+98} y={y+20} textAnchor="middle" dominantBaseline="middle" fontSize="9.5" fontFamily="Inter,sans-serif" fill="#94a3b8">{sub2}</text>}
+      </g>
+    );
+  };
+
+  const Arrow = ({x1,y1,x2,y2,color="#334155",label,labelColor="#94a3b8",dashed}) => {
+    const mx=(x1+x2)/2, my=(y1+y2)/2, aid=`a${x1}${y1}${x2}${y2}`;
+    return (
+      <g>
+        <defs><marker id={aid} markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><polygon points="0 0,7 3.5,0 7" fill={color}/></marker></defs>
+        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={dashed?"1.2":"1.8"} strokeDasharray={dashed?"5,4":"none"} markerEnd={`url(#${aid})`}/>
+        {label && <text x={mx+4} y={my-5} fontSize="9" fill={labelColor} textAnchor="middle">{label}</text>}
+      </g>
+    );
+  };
+
+  const ElbowArrow = ({x1,y1,x2,y2,color,label,labelColor="#94a3b8",dashed,mid}) => {
+    const mx=mid!==undefined?mid:x1, id=`e${x1}${y1}${x2}${y2}`;
+    const d=`M${x1},${y1} L${mx},${y1} L${mx},${y2} L${x2},${y2}`;
+    return (
+      <g>
+        <defs><marker id={id} markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><polygon points="0 0,7 3.5,0 7" fill={color}/></marker></defs>
+        <path d={d} fill="none" stroke={color} strokeWidth={dashed?"1.2":"1.8"} strokeDasharray={dashed?"5,4":"none"} markerEnd={`url(#${id})`}/>
+        {label && <text x={mx+5} y={(y1+y2)/2} fontSize="9" fill={labelColor}>{label}</text>}
+      </g>
+    );
+  };
+
+  const Star = ({cx,cy,r,fill}) => {
+    const pts = Array.from({length:5},(_,i)=>{
+      const a=Math.PI/2+(i*4*Math.PI/5), ai=a+2*Math.PI/5;
+      return `${cx+r*Math.cos(a)},${cy-r*Math.sin(a)} ${cx+(r*0.4)*Math.cos(ai)},${cy-(r*0.4)*Math.sin(ai)}`;
+    }).join(' ');
+    return <polygon points={pts} fill={fill}/>;
+  };
+
+  return (
+    <div style={{padding:16}}>
+      <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:15,fontWeight:700,color:C.accent,marginBottom:10}}>Top 4 Standings</div>
+      {!has4 && <div style={{color:C.muted,fontSize:13,marginBottom:16,background:C.surface,borderRadius:10,padding:"10px 14px",border:`1px solid ${C.border}`}}>Need at least 4 players. Currently {sorted.length} player{sorted.length!==1?"s":""}.</div>}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:20}}>
+        {[0,1,2,3].map(i=>(
+          <div key={i} style={{background:C.surface,borderRadius:10,padding:10,border:`1px solid ${C.border}`,borderTop:`3px solid ${medalColors[i]}`,opacity:top4[i]?1:0.35}}>
+            <div style={{fontSize:10,fontWeight:700,color:medalColors[i],marginBottom:3}}>{medalLabels[i]}</div>
+            <div style={{fontSize:13,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{top4[i]?.name||"—"}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:3}}>
+              <span style={{color:C.green}}>W{top4[i]?.wins||0}</span> <span style={{color:C.accent2}}>L{top4[i]?.losses||0}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:15,fontWeight:700,color:C.accent,marginBottom:10}}>Qualifier Bracket</div>
+      <div style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden",padding:"8px 0"}}>
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:"block"}}>
+          <text x={cQ1} y={16} textAnchor="middle" fontSize="10" fill="#334155" fontFamily="Rajdhani,sans-serif" fontWeight="700">ROUND 1</text>
+          <text x={cQ2} y={16} textAnchor="middle" fontSize="10" fill="#334155" fontFamily="Rajdhani,sans-serif" fontWeight="700">ROUND 2</text>
+          <text x={cFinal} y={16} textAnchor="middle" fontSize="10" fill="#334155" fontFamily="Rajdhani,sans-serif" fontWeight="700">FINAL</text>
+          <line x1="195" y1="24" x2="195" y2={H-20} stroke="#1e293b" strokeWidth="1"/>
+          <line x1="385" y1="24" x2="385" y2={H-20} stroke="#1e293b" strokeWidth="1"/>
+          <Box x={cQ1} y={yQ1} label="Qualifier 1" sub1={`${p(0)} vs ${p(1)}`} color={C.green} tag="Q1"/>
+          <Box x={cQ1} y={yEL} label="Eliminator" sub1={`${p(2)} vs ${p(3)}`} color={C.accent2} tag="EL"/>
+          <Box x={cQ2} y={yQ2} label="Qualifier 2" sub1="Loser(Q1)" sub2="vs Winner(EL)" color={C.blue} tag="Q2"/>
+          <Box x={cFinal} y={yFinal} label="Final" sub1="Winner(Q1)" sub2="vs Winner(Q2)" color={C.accent} tag="F"/>
+          <ElbowArrow x1={cQ1+BW/2} y1={yQ1} x2={cFinal-BW/2} y2={yFinal} color={C.green} label="Winner" labelColor={C.green} mid={385}/>
+          <ElbowArrow x1={cQ1+BW/2} y1={yQ1+16} x2={cQ2-BW/2} y2={yQ2-12} color="#64748b" label="Loser" labelColor="#64748b" dashed={true} mid={220}/>
+          <ElbowArrow x1={cQ1+BW/2} y1={yEL-16} x2={cQ2-BW/2} y2={yQ2+12} color="#64748b" label="Winner" labelColor="#64748b" dashed={true} mid={220}/>
+          <g>
+            <line x1={cQ1+BW/2} y1={yEL+16} x2={cQ1+BW/2+36} y2={yEL+16} stroke={C.accent2} strokeWidth="1.4" strokeDasharray="4,3"/>
+            <rect x={cQ1+BW/2+38} y={yEL+6} width={42} height={20} rx="5" fill="#2a1010" stroke={C.accent2} strokeWidth="1"/>
+            <text x={cQ1+BW/2+59} y={yEL+17} textAnchor="middle" dominantBaseline="middle" fontSize="10" fill={C.accent2} fontWeight="600">OUT</text>
+          </g>
+          <Arrow x1={cQ2+BW/2} y1={yQ2} x2={cFinal-BW/2} y2={yFinal+14} color={C.blue} label="Winner" labelColor={C.blue}/>
+          <g>
+            <line x1={cQ2+4} y1={yQ2+BH/2} x2={cQ2+4} y2={yQ2+BH/2+38} stroke={C.accent2} strokeWidth="1.4" strokeDasharray="4,3"/>
+            <rect x={cQ2-17} y={yQ2+BH/2+40} width={42} height={20} rx="5" fill="#2a1010" stroke={C.accent2} strokeWidth="1"/>
+            <text x={cQ2+4} y={yQ2+BH/2+51} textAnchor="middle" dominantBaseline="middle" fontSize="10" fill={C.accent2} fontWeight="600">OUT</text>
+          </g>
+          <g>
+            <line x1={cFinal} y1={yFinal+BH/2} x2={cFinal} y2={yFinal+BH/2+36} stroke={C.accent} strokeWidth="1.8"/>
+            <rect x={cFinal-54} y={yFinal+BH/2+38} width={108} height={36} rx="10" fill="#1f1a08" stroke={C.accent} strokeWidth="1.5"/>
+            <Star cx={cFinal-30} cy={yFinal+BH/2+56} r={10} fill={C.accent}/>
+            <text x={cFinal-14} y={yFinal+BH/2+57} dominantBaseline="middle" fontSize="13" fontFamily="Rajdhani,sans-serif" fontWeight="700" fill={C.accent}>CHAMPION</text>
+          </g>
+          <g transform={`translate(10,${H-36})`}>
+            <line x1="0" y1="6" x2="22" y2="6" stroke="#64748b" strokeWidth="1.4" strokeDasharray="4,3"/>
+            <text x="26" y="10" fontSize="9" fill="#64748b">Loser path</text>
+            <line x1="90" y1="6" x2="112" y2="6" stroke={C.green} strokeWidth="1.8"/>
+            <text x="116" y="10" fontSize="9" fill={C.green}>Winner path</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function LoginPage({ onLogin }) {
+  const [mode,setMode] = useState(null);
+  const [user,setUser] = useState(""); const [pass,setPass] = useState(""); const [err,setErr] = useState("");
+  const go = () => { if(user===ADMIN.username&&pass===ADMIN.password) onLogin("admin"); else setErr("Invalid credentials"); };
+  const iS = {background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"8px 12px",borderRadius:8,fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",fontFamily:"Inter,sans-serif"};
+  return (
+    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,background:C.bg}}>
+      <div style={{marginBottom:40,textAlign:"center"}}>
+        <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:56,fontWeight:700,color:C.accent,letterSpacing:8}}>ACTL</div>
+        <div style={{color:C.muted,fontSize:13,marginTop:6,letterSpacing:2}}>IPL CONTEST TRACKER</div>
+      </div>
+      {!mode && (
+        <div style={{display:"flex",gap:16,flexWrap:"wrap",justifyContent:"center"}}>
+          <button style={{padding:"16px 32px",background:C.card,border:`2px solid ${C.accent}`,color:C.accent,borderRadius:12,fontSize:15,fontWeight:600,cursor:"pointer"}} onClick={()=>setMode("admin")}>🔐 Admin Login</button>
+          <button style={{padding:"16px 32px",background:C.card,border:`2px solid ${C.blue}`,color:C.blue,borderRadius:12,fontSize:15,fontWeight:600,cursor:"pointer"}} onClick={()=>onLogin("user")}>👤 Continue as User</button>
+        </div>
+      )}
+      {mode==="admin" && (
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:28,width:"100%",maxWidth:360}}>
+          <div style={{fontSize:16,fontWeight:600,marginBottom:20,color:C.text}}>Admin Login</div>
+          <label style={{fontSize:12,color:C.muted,display:"block",marginBottom:6}}>Username</label>
+          <input style={{...iS,marginBottom:12}} value={user} onChange={e=>{setUser(e.target.value);setErr("");}} placeholder="Username"/>
+          <label style={{fontSize:12,color:C.muted,display:"block",marginBottom:6}}>Password</label>
+          <input style={{...iS,marginBottom:16}} type="password" value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder="Password" onKeyDown={e=>e.key==="Enter"&&go()}/>
+          {err && <div style={{color:"#ef4444",fontSize:13,marginBottom:12}}>{err}</div>}
+          <div style={{display:"flex",gap:10}}>
+            <button style={{flex:1,background:C.accent,color:"#000",border:"none",borderRadius:8,padding:"8px 16px",fontWeight:600,cursor:"pointer"}} onClick={go}>Login</button>
+            <button style={{background:"transparent",color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 16px",cursor:"pointer"}} onClick={()=>{setMode(null);setErr("");setUser("");setPass("");}}>Back</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const [role,setRole] = useState(null);
+  const [contests,setContests] = useState([]);
+  const [selContest,setSelContest] = useState(null);
+  const [selSeason,setSelSeason] = useState(null);
+  const [activeTab,setActiveTab] = useState("points");
+  const [loading,setLoading] = useState(false);
+  const [saving,setSaving] = useState(false);
+  const [showCC,setShowCC] = useState(false);
+  const [showCS,setShowCS] = useState(false);
+  const [cName,setCName] = useState("");
+  const [sName,setSName] = useState("");
+  const [newUN,setNewUN] = useState("");
+  const [sUsers,setSUsers] = useState([]);
+  const [delConf,setDelConf] = useState(null);
+
+  const isAdmin = role==="admin";
+  const contest = contests.find(c=>c.id===selContest);
+  const season = contest?.seasons?.find(s=>s.id===selSeason);
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    const [{data:cR},{data:sR},{data:pR},{data:mR},{data:eR}] = await Promise.all([
+      sb.from("contests").select("*").order("created_at"),
+      sb.from("seasons").select("*").order("created_at"),
+      sb.from("players").select("*"),
+      sb.from("milestone_table").select("*"),
+      sb.from("closest_escape").select("*").order("sort_order"),
+    ]);
+    const built = (cR||[]).map(c=>({
+      ...c,
+      seasons:(sR||[]).filter(s=>s.contest_id===c.id).map(s=>({
+        ...s,
+        users:(pR||[]).filter(p=>p.season_id===s.id),
+        stats:{
+          milestoneTable:(mR||[]).filter(m=>m.season_id===s.id),
+          closestEscape:(eR||[]).filter(e=>e.season_id===s.id),
+        }
+      }))
+    }));
+    setContests(built);
+    setLoading(false);
+  },[]);
+
+  useEffect(()=>{ if(role) fetchAll(); },[role]);
+
+  const createContest = async () => {
+    if(!cName.trim()) return; setSaving(true);
+    const {data} = await sb.from("contests").insert({name:cName.trim()}).select().single();
+    if(data){setSelContest(data.id);setSelSeason(null);}
+    setCName(""); setShowCC(false); await fetchAll(); setSaving(false);
+  };
+
+  const deleteContest = async (id) => {
+    await sb.from("contests").delete().eq("id",id);
+    if(selContest===id){setSelContest(null);setSelSeason(null);}
+    await fetchAll();
+  };
+
+  const createSeason = async () => {
+    if(!sName.trim()||!selContest) return; setSaving(true);
+    const {data:s} = await sb.from("seasons").insert({contest_id:selContest,name:sName.trim()}).select().single();
+    if(s && sUsers.length>0){
+      const {data:players} = await sb.from("players").insert(sUsers.map(u=>({season_id:s.id,name:u,wins:0,losses:0}))).select();
+      if(players?.length) await sb.from("milestone_table").insert(players.map(p=>({season_id:s.id,player_id:p.id,times:0})));
+    }
+    if(s) setSelSeason(s.id);
+    setSName(""); setSUsers([]); setShowCS(false); await fetchAll(); setSaving(false);
+  };
+
+  const deleteSeason = async (sid) => {
+    await sb.from("seasons").delete().eq("id",sid);
+    if(selSeason===sid) setSelSeason(null);
+    await fetchAll();
+  };
+
+  const updateWL = async (pid,field,val) => {
+    await sb.from("players").update({[field]:Math.max(0,parseInt(val)||0)}).eq("id",pid);
+    await fetchAll();
+  };
+
+  const updateMilestone = async (id,val) => {
+    await sb.from("milestone_table").update({times:Math.max(0,parseInt(val)||0)}).eq("id",id);
+    await fetchAll();
+  };
+
+  const addCERow = async () => {
+    await sb.from("closest_escape").insert({season_id:selSeason,entry:"",sort_order:(season?.stats?.closestEscape||[]).length});
+    await fetchAll();
+  };
+
+  const updateCE = async (ceId,val) => {
+    await sb.from("closest_escape").update({entry:val}).eq("id",ceId);
+    setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,closestEscape:s.stats.closestEscape.map(e=>e.id===ceId?{...e,entry:val}:e)}})}));
+  };
+
+  const deleteCERow = async (ceId) => {
+    await sb.from("closest_escape").delete().eq("id",ceId);
+    await fetchAll();
+  };
+
+  if(!role) return <LoginPage onLogin={r=>setRole(r)}/>;
+
+  const sortedUsers = season ? sortUsers(season.users) : [];
+  const iS = {background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"8px 12px",borderRadius:8,fontSize:14,fontFamily:"Inter,sans-serif",width:"100%",outline:"none",boxSizing:"border-box"};
+  const niS = {background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"4px 8px",borderRadius:6,width:64,fontSize:14,textAlign:"center",outline:"none"};
+  const thS = {textAlign:"left",padding:"10px 12px",fontSize:11,color:C.muted,fontWeight:500,textTransform:"uppercase",letterSpacing:".05em",borderBottom:`1px solid ${C.border}`};
+  const tdS = {padding:"10px 12px",fontSize:14,borderBottom:`1px solid ${C.border}`};
+  const mo = {position:"fixed",inset:0,background:"rgba(0,0,0,.72)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16};
+  const md = {background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:24,width:"100%",maxWidth:440};
+
+  return (
+    <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"Inter,sans-serif"}}>
+
+      {/* Header */}
+      <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
+        <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:28,fontWeight:700,color:C.accent,letterSpacing:4}}>ACTL</div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          {saving && <span style={{fontSize:11,color:C.muted}}>Saving…</span>}
+          <span style={{display:"inline-block",padding:"2px 8px",borderRadius:12,fontSize:11,fontWeight:600,background:isAdmin?"#451a0366":"#1e3a5f66",color:isAdmin?C.accent:C.blue}}>{isAdmin?"👑 Admin":"👤 User"}</span>
+          <button style={{background:"transparent",color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}} onClick={()=>{setRole(null);setSelContest(null);setSelSeason(null);}}>Logout</button>
+        </div>
+      </div>
+
+      <div style={{maxWidth:700,margin:"0 auto",padding:16}}>
+        {loading ? <Spinner/> : (
+          <>
+            {/* Contests */}
+            <div style={{marginBottom:16}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                <div style={{fontSize:12,color:C.muted,fontWeight:500,textTransform:"uppercase",letterSpacing:1}}>Contests</div>
+                {isAdmin && <button style={{background:C.accent,color:"#000",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}} onClick={()=>setShowCC(true)}>+ Create Contest</button>}
+              </div>
+              <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:4}}>
+                {contests.length===0 && <div style={{color:C.muted,fontSize:13,padding:"14px 0"}}>No contests yet.{isAdmin?" Create one!":""}</div>}
+                {contests.map(c=>(
+                  <div key={c.id} onClick={()=>{setSelContest(c.id);setSelSeason(null);}} style={{minWidth:160,background:selContest===c.id?"#1c2416":C.card,border:`1px solid ${selContest===c.id?C.accent:C.border}`,borderRadius:12,padding:"14px 16px",cursor:"pointer",flexShrink:0}}>
+                    <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>{c.name}</div>
+                    <div style={{fontSize:12,color:C.muted}}>{c.seasons?.length||0} season{c.seasons?.length!==1?"s":""}</div>
+                    {isAdmin && <button onClick={e=>{e.stopPropagation();setDelConf({type:"contest",id:c.id,name:c.name});}} style={{marginTop:8,background:"none",border:"none",color:"#ef4444",cursor:"pointer",fontSize:11,padding:0}}>🗑 Delete</button>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Seasons */}
+            {contest && (
+              <div style={{marginBottom:16}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                  <div>
+                    <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:20,fontWeight:700}}>{contest.name}</div>
+                    <div style={{fontSize:12,color:C.muted}}>Select a season</div>
+                  </div>
+                  {isAdmin && <button style={{background:C.blue,color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,cursor:"pointer"}} onClick={()=>setShowCS(true)}>+ New Season</button>}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>
+                  {contest.seasons?.length===0 && <div style={{color:C.muted,fontSize:13}}>No seasons yet.{isAdmin?" Create one!":""}</div>}
+                  {contest.seasons?.map(s=>(
+                    <div key={s.id} onClick={()=>setSelSeason(s.id)} style={{background:C.card,border:`1px solid ${selSeason===s.id?C.accent:C.border}`,borderRadius:12,padding:"14px 16px",cursor:"pointer"}}>
+                      <div style={{fontSize:14,fontWeight:600}}>{s.name}</div>
+                      <div style={{fontSize:12,color:C.muted,marginTop:4}}>{s.users?.length||0} players</div>
+                      {isAdmin && <button onClick={e=>{e.stopPropagation();setDelConf({type:"season",id:s.id,name:s.name});}} style={{marginTop:8,background:"none",border:"none",color:"#ef4444",cursor:"pointer",fontSize:11,padding:0}}>🗑 Delete</button>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Season Detail */}
+            {season && (
+              <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+                <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`,background:C.surface}}>
+                  <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:18,fontWeight:700,color:C.accent}}>{season.name}</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>Season · {contest?.name}</div>
+                </div>
+                <div style={{padding:"10px 12px",display:"flex",gap:6,borderBottom:`1px solid ${C.border}`,overflowX:"auto"}}>
+                  {["points","stats","qualifier"].map(t=>(
+                    <button key={t} onClick={()=>setActiveTab(t)} style={{padding:"8px 16px",borderRadius:8,fontSize:13,fontWeight:500,cursor:"pointer",border:"none",background:activeTab===t?C.accent:"transparent",color:activeTab===t?"#000":C.muted,whiteSpace:"nowrap"}}>
+                      {t==="points"?"Points Table":t==="stats"?"Stats":"Qualifier"}
+                    </button>
+                  ))}
+                </div>
+
+                {activeTab==="points" && (
+                  <div style={{paddingBottom:8}}>
+                    <table style={{width:"100%",borderCollapse:"collapse"}}>
+                      <thead><tr>{["#","Player","Losses","Wins"].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {sortedUsers.map((u,i)=>(
+                          <tr key={u.id}>
+                            <td style={{...tdS,color:C.muted,width:36}}>{i+1}</td>
+                            <td style={{...tdS,fontWeight:500}}>{u.name}</td>
+                            <td style={tdS}>{isAdmin?<input type="number" style={niS} defaultValue={u.losses||0} onBlur={e=>updateWL(u.id,"losses",e.target.value)} min={0}/>:<span style={{color:"#ef4444",fontWeight:600}}>{u.losses||0}</span>}</td>
+                            <td style={tdS}>{isAdmin?<input type="number" style={niS} defaultValue={u.wins||0} onBlur={e=>updateWL(u.id,"wins",e.target.value)} min={0}/>:<span style={{color:C.green,fontWeight:600}}>{u.wins||0}</span>}</td>
+                          </tr>
+                        ))}
+                        {sortedUsers.length===0 && <tr><td colSpan={4} style={{...tdS,color:C.muted,textAlign:"center",padding:20}}>No players in this season.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {activeTab==="stats" && (
+                  <div style={{padding:16}}>
+                    <div style={{marginBottom:24}}>
+                      <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:15,fontWeight:700,color:C.accent,marginBottom:10}}>Players to Score More Than 1000 Points</div>
+                      <div style={{background:C.surface,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+                        <table style={{width:"100%",borderCollapse:"collapse"}}>
+                          <thead><tr><th style={thS}>Player Name</th><th style={thS}>How Many Times</th></tr></thead>
+                          <tbody>
+                            {(season.stats?.milestoneTable||[]).map(row=>(
+                              <tr key={row.id}>
+                                <td style={{...tdS,fontWeight:500}}>{season.users.find(u=>u.id===row.player_id)?.name||"—"}</td>
+                                <td style={tdS}>{isAdmin?<input type="number" style={niS} defaultValue={row.times||0} min={0} onBlur={e=>updateMilestone(row.id,e.target.value)}/>:<span style={{fontWeight:600,color:C.blue}}>{row.times||0}</span>}</td>
+                              </tr>
+                            ))}
+                            {(season.stats?.milestoneTable||[]).length===0 && <tr><td colSpan={2} style={{...tdS,color:C.muted,textAlign:"center"}}>No players yet.</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                        <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:15,fontWeight:700,color:C.accent}}>Closest Escape</div>
+                        {isAdmin && <button style={{background:"transparent",color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12,padding:"4px 12px",cursor:"pointer"}} onClick={addCERow}>+ Add Row</button>}
+                      </div>
+                      <div style={{background:C.surface,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+                        <table style={{width:"100%",borderCollapse:"collapse"}}>
+                          <thead><tr><th style={thS}>Entry</th>{isAdmin&&<th style={{...thS,width:40}}></th>}</tr></thead>
+                          <tbody>
+                            {(season.stats?.closestEscape||[]).map(row=>(
+                              <tr key={row.id}>
+                                <td style={tdS}>{isAdmin?<input style={{...iS,padding:"4px 8px",fontSize:13}} defaultValue={row.entry} onBlur={e=>updateCE(row.id,e.target.value)} placeholder="Enter entry..."/>:row.entry||"—"}</td>
+                                {isAdmin && <td style={tdS}><button onClick={()=>deleteCERow(row.id)} style={{background:"none",border:"none",color:"#ef4444",cursor:"pointer",fontSize:14}}>✕</button></td>}
+                              </tr>
+                            ))}
+                            {(season.stats?.closestEscape||[]).length===0 && <tr><td colSpan={isAdmin?2:1} style={{...tdS,color:C.muted,textAlign:"center"}}>No entries yet.{isAdmin?" Click + Add Row.":""}</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab==="qualifier" && <QualifierTab users={season.users}/>}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Modals */}
+      {showCC && (
+        <div onClick={()=>setShowCC(false)} style={mo}>
+          <div onClick={e=>e.stopPropagation()} style={md}>
+            <div style={{fontSize:16,fontWeight:600,marginBottom:20}}>Create Contest</div>
+            <label style={{fontSize:12,color:C.muted,display:"block",marginBottom:6}}>Contest Name</label>
+            <input style={iS} value={cName} onChange={e=>setCName(e.target.value)} placeholder="e.g. IPL 2025 Office League" onKeyDown={e=>e.key==="Enter"&&createContest()} autoFocus/>
+            <div style={{display:"flex",gap:10,marginTop:20}}>
+              <button style={{flex:1,background:C.accent,color:"#000",border:"none",borderRadius:8,padding:"8px 16px",fontWeight:600,cursor:"pointer"}} onClick={createContest}>Create</button>
+              <button style={{background:"transparent",color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 16px",cursor:"pointer"}} onClick={()=>{setShowCC(false);setCName("");}}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCS && (
+        <div onClick={()=>setShowCS(false)} style={mo}>
+          <div onClick={e=>e.stopPropagation()} style={{...md,maxHeight:"80vh",overflowY:"auto"}}>
+            <div style={{fontSize:16,fontWeight:600,marginBottom:20}}>Create Season</div>
+            <label style={{fontSize:12,color:C.muted,display:"block",marginBottom:6}}>Season Name</label>
+            <input style={{...iS,marginBottom:16}} value={sName} onChange={e=>setSName(e.target.value)} placeholder="e.g. Season 1" autoFocus/>
+            <label style={{fontSize:12,color:C.muted,display:"block",marginBottom:8}}>Players</label>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10,minHeight:36}}>
+              {sUsers.map((u,i)=>(<span key={i} style={{display:"inline-flex",alignItems:"center",background:"#1e293b",color:C.muted,fontSize:12,padding:"4px 10px",borderRadius:20,gap:6}}>{u}<span style={{cursor:"pointer",color:"#ef4444"}} onClick={()=>setSUsers(p=>p.filter((_,j)=>j!==i))}>✕</span></span>))}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <input style={iS} value={newUN} onChange={e=>setNewUN(e.target.value)} placeholder="Player name" onKeyDown={e=>{if(e.key==="Enter"&&newUN.trim()){setSUsers(p=>[...p,newUN.trim()]);setNewUN("");}}}/>
+              <button style={{background:C.blue,color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:600}} onClick={()=>{if(newUN.trim()){setSUsers(p=>[...p,newUN.trim()]);setNewUN("");}}}>+</button>
+            </div>
+            <div style={{display:"flex",gap:10,marginTop:20}}>
+              <button style={{flex:1,background:C.accent,color:"#000",border:"none",borderRadius:8,padding:"8px 16px",fontWeight:600,cursor:"pointer",opacity:!sName.trim()?0.5:1}} onClick={createSeason} disabled={!sName.trim()}>Save Season</button>
+              <button style={{background:"transparent",color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 16px",cursor:"pointer"}} onClick={()=>{setShowCS(false);setSName("");setSUsers([]);setNewUN("");}}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {delConf && (
+        <div onClick={()=>setDelConf(null)} style={mo}>
+          <div onClick={e=>e.stopPropagation()} style={{...md,maxWidth:340}}>
+            <div style={{fontSize:16,fontWeight:600,marginBottom:10}}>Confirm Delete</div>
+            <div style={{fontSize:14,color:C.muted,marginBottom:20}}>Delete <strong style={{color:C.text}}>{delConf.name}</strong>? This cannot be undone.</div>
+            <div style={{display:"flex",gap:10}}>
+              <button style={{flex:1,background:C.accent2,color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontWeight:600,cursor:"pointer"}} onClick={()=>{
+                if(delConf.type==="contest") deleteContest(delConf.id);
+                if(delConf.type==="season") deleteSeason(delConf.id);
+                setDelConf(null);
+              }}>Delete</button>
+              <button style={{background:"transparent",color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 16px",cursor:"pointer"}} onClick={()=>setDelConf(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
