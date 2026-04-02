@@ -385,9 +385,15 @@ function App(){
     await fetchAll();
   };
 
-  /* sitout */
-  const updateSitout=async(id,field,val)=>{
-    await sb.from("sitout_table").update({[field]:Math.max(0,val)}).eq("id",id);
+  /* sitout — upsert: create row if not yet in DB */
+  const updateSitout=async(id,field,val,playerId)=>{
+    if(id){
+      await sb.from("sitout_table").update({[field]:Math.max(0,val)}).eq("id",id);
+    } else {
+      // get current values for the other field before inserting
+      const otherField=field==="sitouts"?"last10":"sitouts";
+      await sb.from("sitout_table").insert({season_id:selSeason,player_id:playerId,[field]:Math.max(0,val),[otherField]:0});
+    }
     await fetchAll();
   };
 
@@ -616,13 +622,13 @@ function App(){
                             <tr key={row.player_id}>
                               <td style={{...tdS,fontWeight:500}}>{player.name}</td>
                               <td style={tdS}>
-                                {isAdmin&&row.id
-                                  ?<Stepper value={row.sitouts||0} onChange={v=>updateSitout(row.id,"sitouts",v)}/>
+                                {isAdmin
+                                  ?<Stepper value={row.sitouts||0} onChange={v=>updateSitout(row.id,"sitouts",v,row.player_id)}/>
                                   :<span style={{fontWeight:600,color:C.accent}}>{row.sitouts||0}</span>}
                               </td>
                               <td style={tdS}>
-                                {isAdmin&&row.id
-                                  ?<Stepper value={row.last10||0} onChange={v=>updateSitout(row.id,"last10",v)}/>
+                                {isAdmin
+                                  ?<Stepper value={row.last10||0} onChange={v=>updateSitout(row.id,"last10",v,row.player_id)}/>
                                   :<span style={{fontWeight:600,color:C.blue}}>{row.last10||0}</span>}
                               </td>
                             </tr>
