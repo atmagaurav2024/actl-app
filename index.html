@@ -425,26 +425,41 @@ function App(){
   };
 
   const updateWL=async(pid,field,val)=>{
-    await sb.from("players").update({[field]:Math.max(0,val)}).eq("id",pid);
-    await fetchAll();
+    const v=Math.max(0,val);
+    // optimistic update — update in-memory without re-sorting display
+    const patch=(list)=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,users:s.users.map(u=>u.id===pid?{...u,[field]:v}:u)}))}));
+    setContests(patch);
+    setFrozenContests(patch);
+    await sb.from("players").update({[field]:v}).eq("id",pid);
   };
 
   /* milestone */
   const updateMilestone=async(id,val)=>{
-    await sb.from("milestone_table").update({times:Math.max(0,val)}).eq("id",id);
-    await fetchAll();
+    const v=Math.max(0,val);
+    const patch=(list)=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,stats:{...s.stats,milestoneTable:s.stats.milestoneTable.map(m=>m.id===id?{...m,times:v}:m)}}))}));
+    setContests(patch);
+    setFrozenContests(patch);
+    await sb.from("milestone_table").update({times:v}).eq("id",id);
   };
 
   /* sitout — upsert: create row if not yet in DB */
   const updateSitout=async(id,field,val,playerId)=>{
+    const v=Math.max(0,val);
     if(id){
-      await sb.from("sitout_table").update({[field]:Math.max(0,val)}).eq("id",id);
+      // optimistic update
+      const patch=(list)=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,stats:{...s.stats,sitoutTable:s.stats.sitoutTable.map(o=>o.id===id?{...o,[field]:v}:o)}}))}));
+      setContests(patch);
+      setFrozenContests(patch);
+      await sb.from("sitout_table").update({[field]:v}).eq("id",id);
     } else {
-      // get current values for the other field before inserting
       const otherField=field==="sitouts"?"last10":"sitouts";
-      await sb.from("sitout_table").insert({season_id:selSeason,player_id:playerId,[field]:Math.max(0,val),[otherField]:0});
+      const{data:newRow}=await sb.from("sitout_table").insert({season_id:selSeason,player_id:playerId,[field]:v,[otherField]:0}).select().single();
+      if(newRow){
+        const patch=(list)=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,stats:{...s.stats,sitoutTable:[...s.stats.sitoutTable,newRow]}}))}));
+        setContests(patch);
+        setFrozenContests(patch);
+      }
     }
-    await fetchAll();
   };
 
   /* closest escape */
