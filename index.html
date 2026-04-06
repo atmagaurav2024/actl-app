@@ -303,6 +303,9 @@ function App(){
   const [sUsers,setSUsers]=useState([]);
   const [delConf,setDelConf]=useState(null);
   const [rules,setRules]=useState("");
+  const [showPlayers,setShowPlayers]=useState(false);
+  const [newPlayerName,setNewPlayerName]=useState("");
+  const [editingPlayer,setEditingPlayer]=useState(null);
 
   const isAdmin=role==="admin";
   const contest=contests.find(c=>c.id===selContest);
@@ -374,6 +377,26 @@ function App(){
   };
 
   /* points */
+  /* player management */
+  const addPlayer=async(name)=>{
+    if(!name.trim()||!selSeason) return; setSaving(true);
+    const{data:p}=await sb.from("players").insert({season_id:selSeason,name:name.trim(),wins:0,losses:0}).select().single();
+    if(p){
+      await sb.from("milestone_table").insert({season_id:selSeason,player_id:p.id,times:0});
+      await sb.from("sitout_table").insert({season_id:selSeason,player_id:p.id,sitouts:0,last10:0});
+    }
+    await fetchAll(); setSaving(false);
+  };
+  const editPlayer=async(id,name)=>{
+    if(!name.trim()) return; setSaving(true);
+    await sb.from("players").update({name:name.trim()}).eq("id",id);
+    await fetchAll(); setSaving(false);
+  };
+  const deletePlayer=async(id)=>{
+    await sb.from("players").delete().eq("id",id);
+    await fetchAll();
+  };
+
   const updateWL=async(pid,field,val)=>{
     await sb.from("players").update({[field]:Math.max(0,val)}).eq("id",pid);
     await fetchAll();
@@ -513,8 +536,13 @@ function App(){
             {season&&(
               <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.border}`,overflow:"hidden"}}>
                 <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`,background:C.surface}}>
-                  <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:18,fontWeight:700,color:C.accent}}>{season.name}</div>
-                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>Season · {contest?.name}</div>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div>
+                      <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:18,fontWeight:700,color:C.accent}}>{season.name}</div>
+                      <div style={{fontSize:12,color:C.muted,marginTop:2}}>Season · {contest?.name} · {season.users?.length||0} players</div>
+                    </div>
+                    {isAdmin&&<button onClick={()=>setShowPlayers(true)} style={{background:C.blue,color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,cursor:"pointer",flexShrink:0}}>👥 Players</button>}
+                  </div>
                 </div>
                 {/* Tabs */}
                 <div style={{padding:"10px 12px",display:"flex",gap:6,borderBottom:`1px solid ${C.border}`,overflowX:"auto"}}>
@@ -699,12 +727,68 @@ function App(){
         </div>
       )}
 
+      {/* Manage Players Modal */}
+      {showPlayers&&season&&(
+        <div onClick={()=>{setShowPlayers(false);setNewPlayerName("");setEditingPlayer(null);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:150}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px 16px 0 0",padding:24,width:"100%",maxWidth:500,maxHeight:"85vh",display:"flex",flexDirection:"column"}}>
+            <div style={{width:40,height:4,background:C.border,borderRadius:4,margin:"0 auto 16px"}}/>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexShrink:0}}>
+              <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:18,fontWeight:700,color:C.accent}}>👥 Manage Players</div>
+              <button onClick={()=>{setShowPlayers(false);setNewPlayerName("");setEditingPlayer(null);}} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>✕</button>
+            </div>
+            {/* Add new player */}
+            <div style={{display:"flex",gap:8,marginBottom:16,flexShrink:0}}>
+              <input
+                style={{background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"10px 14px",borderRadius:8,fontSize:16,flex:1,outline:"none",boxSizing:"border-box"}}
+                value={newPlayerName} onChange={e=>setNewPlayerName(e.target.value)}
+                placeholder="New player name"
+                onKeyDown={e=>{if(e.key==="Enter"&&newPlayerName.trim()){addPlayer(newPlayerName);setNewPlayerName("");}}}
+              />
+              <button style={{background:C.green,color:"#000",border:"none",borderRadius:8,padding:"10px 18px",fontWeight:700,fontSize:18,cursor:"pointer",flexShrink:0}}
+                onClick={()=>{if(newPlayerName.trim()){addPlayer(newPlayerName);setNewPlayerName("");}}}
+              >+</button>
+            </div>
+            {/* Player list */}
+            <div style={{overflowY:"auto",flex:1}}>
+              {season.users.length===0&&<div style={{color:C.muted,fontSize:14,textAlign:"center",padding:20}}>No players yet.</div>}
+              {season.users.map(u=>(
+                <div key={u.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+                  {editingPlayer?.id===u.id ? (
+                    <>
+                      <input
+                        style={{background:C.bg,border:`1px solid ${C.accent}`,color:C.text,padding:"8px 12px",borderRadius:8,fontSize:15,flex:1,outline:"none",boxSizing:"border-box"}}
+                        value={editingPlayer.name}
+                        onChange={e=>setEditingPlayer(p=>({...p,name:e.target.value}))}
+                        onKeyDown={e=>{if(e.key==="Enter"){editPlayer(u.id,editingPlayer.name);setEditingPlayer(null);}if(e.key==="Escape")setEditingPlayer(null);}}
+                        autoFocus
+                      />
+                      <button onClick={()=>{editPlayer(u.id,editingPlayer.name);setEditingPlayer(null);}} style={{background:C.green,color:"#000",border:"none",borderRadius:8,padding:"8px 14px",fontWeight:600,cursor:"pointer",fontSize:14,flexShrink:0}}>Save</button>
+                      <button onClick={()=>setEditingPlayer(null)} style={{background:"transparent",color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",cursor:"pointer",fontSize:14,flexShrink:0}}>Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:15,fontWeight:500,color:C.text}}>{u.name}</div>
+                        <div style={{fontSize:11,color:C.muted,marginTop:2}}><span style={{color:C.green}}>W{u.wins||0}</span> · <span style={{color:C.accent2}}>L{u.losses||0}</span></div>
+                      </div>
+                      <button onClick={()=>setEditingPlayer({id:u.id,name:u.name})} style={{background:"transparent",color:C.blue,border:`1px solid ${C.blue}`,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:13,flexShrink:0}}>✏️ Edit</button>
+                      <button onClick={()=>setDelConf({type:"player",id:u.id,name:u.name})} style={{background:"transparent",color:C.accent2,border:`1px solid ${C.accent2}`,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:13,flexShrink:0}}>🗑</button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete with password */}
       {delConf&&(
         <DeleteConfirm item={delConf} onCancel={()=>setDelConf(null)} onConfirm={async()=>{
           if(delConf.type==="contest") await deleteContest(delConf.id);
           else if(delConf.type==="season") await deleteSeason(delConf.id);
           else if(delConf.type==="ce") await deleteCERow(delConf.id);
+          else if(delConf.type==="player") await deletePlayer(delConf.id);
           setDelConf(null);
         }}/>
       )}
