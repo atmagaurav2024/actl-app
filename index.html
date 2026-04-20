@@ -620,10 +620,8 @@ function App(){
                       <thead><tr>
                         <th style={thS}>#</th>
                         <th style={thS}>Player</th>
-                        <th style={thS}>Losses</th>
-                        <th style={{...thS,color:C.accent}} title="0.5 loss added per sitout">Sit Loss</th>
-                        <th style={thS}>Eff. Loss</th>
-                        <th style={thS}>Wins</th>
+                        <th style={{...thS,color:C.accent2}}>Losses</th>
+                        <th style={{...thS,color:C.green}}>Wins</th>
                       </tr></thead>
                       <tbody>
                         {sortedUsers.map((u,i)=>(
@@ -631,18 +629,23 @@ function App(){
                             <td style={{...tdS,color:C.muted,width:28}}>{i+1}</td>
                             <td style={{...tdS,fontWeight:500}}>{u.name}</td>
                             <td style={tdS}>
-                              {isAdmin
-                                ?<Stepper value={u.losses||0} onChange={v=>updateWL(u.id,"losses",v)}/>
-                                :<span style={{color:C.accent2,fontWeight:600}}>{u.losses||0}</span>}
-                            </td>
-                            <td style={{...tdS,textAlign:"center"}}>
-                              <span style={{color:C.accent,fontWeight:600}}>{sitoutMap[u.id]||0}</span>
-                            </td>
-                            <td style={{...tdS,textAlign:"center"}}>
-                              {(()=>{
-                                const eff=effectiveLosses(u,sitoutMap);
-                                return <span style={{color:"#fb923c",fontWeight:700,fontSize:15}}>{eff%1===0?eff:eff.toFixed(1)}</span>;
-                              })()}
+                              {isAdmin ? (
+                                <div style={{display:"flex",alignItems:"center",gap:4}}>
+                                  <Stepper value={u.losses||0} onChange={v=>updateWL(u.id,"losses",v)}/>
+                                  {(sitoutMap[u.id]||0)>0 && (
+                                    <span style={{fontSize:11,color:C.accent,marginLeft:4}}>+{((sitoutMap[u.id]||0)*0.5).toFixed(1)}so</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                  <span style={{color:C.accent2,fontWeight:700,fontSize:15}}>
+                                    {(()=>{const eff=effectiveLosses(u,sitoutMap);return eff%1===0?eff:eff.toFixed(1);})()}
+                                  </span>
+                                  {(sitoutMap[u.id]||0)>0 && (
+                                    <span style={{fontSize:10,color:C.muted}}>(+{((sitoutMap[u.id]||0)*0.5).toFixed(1)}so)</span>
+                                  )}
+                                </div>
+                              )}
                             </td>
                             <td style={tdS}>
                               {isAdmin
