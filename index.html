@@ -17,8 +17,13 @@ body{background:#0a0e1a;color:#f1f5f9;font-family:'Inter',sans-serif;min-height:
 ::-webkit-scrollbar-thumb{background:#334155;border-radius:4px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 input,button,select,textarea{font-family:'Inter',sans-serif;}
-.pm-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;border:none;cursor:pointer;font-size:18px;font-weight:700;line-height:1;flex-shrink:0;}
-.pm-val{min-width:40px;text-align:center;font-size:15px;font-weight:600;}
+.pm-btn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;border:none;cursor:pointer;font-size:17px;font-weight:700;line-height:1;flex-shrink:0;touch-action:manipulation;}
+.pm-val{min-width:28px;text-align:center;font-size:14px;font-weight:600;}
+.pm-wrap{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;}
+@media(max-width:400px){
+  .pm-btn{width:28px;height:28px;font-size:16px;}
+  .pm-val{min-width:22px;font-size:13px;}
+}
 </style>
 </head>
 <body>
@@ -65,7 +70,7 @@ function Spinner(){
 /* ── +/- stepper ── */
 function Stepper({ value, onChange, disabled }){
   return (
-    <div style={{display:"flex",alignItems:"center",gap:6}}>
+    <div className="pm-wrap">
       <button className="pm-btn" style={{background:disabled?"#1e293b":"#2a1010",color:disabled?C.muted:C.accent2}} onClick={()=>!disabled&&onChange(Math.max(0,(value||0)-1))} disabled={disabled}>−</button>
       <span className="pm-val" style={{color:C.text}}>{value||0}</span>
       <button className="pm-btn" style={{background:disabled?"#1e293b":"#1a2a0a",color:disabled?C.muted:C.green}} onClick={()=>!disabled&&onChange((value||0)+1)} disabled={disabled}>+</button>
@@ -517,8 +522,8 @@ function App(){
 
   /* styles */
   const iS={background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"12px 14px",borderRadius:8,fontSize:16,fontFamily:"Inter,sans-serif",width:"100%",outline:"none",boxSizing:"border-box"};
-  const thS={textAlign:"left",padding:"10px 12px",fontSize:11,color:C.muted,fontWeight:500,textTransform:"uppercase",letterSpacing:".05em",borderBottom:`1px solid ${C.border}`};
-  const tdS={padding:"10px 12px",fontSize:14,borderBottom:`1px solid ${C.border}`};
+  const thS={textAlign:"left",padding:"8px 8px",fontSize:10,color:C.muted,fontWeight:500,textTransform:"uppercase",letterSpacing:".03em",borderBottom:`1px solid ${C.border}`};
+  const tdS={padding:"8px 8px",fontSize:13,borderBottom:`1px solid ${C.border}`};
   const mo={position:"fixed",inset:0,background:"rgba(0,0,0,.85)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100};
   const md={background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px 16px 0 0",padding:24,width:"100%",maxWidth:500};
   const tabs=["points","stats","sitouts","qualifier"];
@@ -616,7 +621,13 @@ function App(){
                 {/* ── POINTS TABLE ── */}
                 {activeTab==="points"&&(
                   <div style={{paddingBottom:8}}>
-                    <table style={{width:"100%",borderCollapse:"collapse"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed"}}>
+                      <colgroup>
+                        <col style={{width:"28px"}}/>
+                        <col style={{width:"auto"}}/>
+                        <col style={{width:"120px"}}/>
+                        <col style={{width:"100px"}}/>
+                      </colgroup>
                       <thead><tr>
                         <th style={thS}>#</th>
                         <th style={thS}>Player</th>
@@ -630,19 +641,19 @@ function App(){
                             <td style={{...tdS,fontWeight:500}}>{u.name}</td>
                             <td style={tdS}>
                               {isAdmin ? (
-                                <div style={{display:"flex",alignItems:"center",gap:4}}>
+                                <div style={{display:"flex",flexDirection:"column",gap:2}}>
                                   <Stepper value={u.losses||0} onChange={v=>updateWL(u.id,"losses",v)}/>
                                   {(sitoutMap[u.id]||0)>0 && (
-                                    <span style={{fontSize:11,color:C.accent,marginLeft:4}}>+{((sitoutMap[u.id]||0)*0.5).toFixed(1)}so</span>
+                                    <span style={{fontSize:10,color:C.accent}}>+{((sitoutMap[u.id]||0)*0.5).toFixed(1)}so</span>
                                   )}
                                 </div>
                               ) : (
-                                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                <div style={{display:"flex",flexDirection:"column",gap:1}}>
                                   <span style={{color:C.accent2,fontWeight:700,fontSize:15}}>
                                     {(()=>{const eff=effectiveLosses(u,sitoutMap);return eff%1===0?eff:eff.toFixed(1);})()}
                                   </span>
                                   {(sitoutMap[u.id]||0)>0 && (
-                                    <span style={{fontSize:10,color:C.muted}}>(+{((sitoutMap[u.id]||0)*0.5).toFixed(1)}so)</span>
+                                    <span style={{fontSize:10,color:C.muted}}>+{((sitoutMap[u.id]||0)*0.5).toFixed(1)}so</span>
                                   )}
                                 </div>
                               )}
