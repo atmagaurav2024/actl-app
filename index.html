@@ -41,9 +41,14 @@ const C = {
 const { useState, useEffect, useCallback, useRef } = React;
 
 /* ── helpers ── */
-function sortUsers(users) {
+function effectiveLosses(user, sitoutMap){
+  return (user.losses||0) + (sitoutMap ? (sitoutMap[user.id]||0) : 0) * 0.5;
+}
+
+function sortUsers(users,sitoutMap={}) {
   return [...users].sort((a,b)=>{
-    const la=a.losses||0,lb=b.losses||0;
+    const la=effectiveLosses(a,sitoutMap);
+    const lb=effectiveLosses(b,sitoutMap);
     if(la!==lb) return la-lb;
     const wa=a.wins||0,wb=b.wins||0;
     if(wa!==wb) return wb-wa;
@@ -124,8 +129,8 @@ function RulebookModal({ rules, isAdmin, onClose, onSave }){
 }
 
 /* ── qualifier tab ── */
-function QualifierTab({ users, seasonId, qualData, onSaveQual, isAdmin }){
-  const sorted=sortUsers(users);
+function QualifierTab({ users, seasonId, qualData, onSaveQual, isAdmin, sitoutMap }){
+  const sorted=sortUsers(users, sitoutMap||{});
   const top4=sorted.slice(0,4);
   const has4=top4.length>=4;
   const [q,setQ]=useState(qualData||{});
@@ -495,7 +500,9 @@ function App(){
   if(!role) return <LoginPage onLogin={r=>setRole(r)}/>;
 
   /* derived sorted lists */
-  const sortedUsers=season?sortUsers(season.users):[];
+  // sitout map: player_id -> sitouts count
+  const sitoutMap=season?(season.stats?.sitoutTable||[]).reduce((acc,r)=>{acc[r.player_id]=r.sitouts||0;return acc;},{}):{};
+  const sortedUsers=season?sortUsers(season.users,sitoutMap):[];
 
   // milestone: descending by times
   const sortedMilestone=season?[...(season.stats?.milestoneTable||[])].sort((a,b)=>(b.times||0)-(a.times||0)):[];
@@ -614,17 +621,28 @@ function App(){
                         <th style={thS}>#</th>
                         <th style={thS}>Player</th>
                         <th style={thS}>Losses</th>
+                        <th style={{...thS,color:C.accent}} title="0.5 loss added per sitout">Sit Loss</th>
+                        <th style={thS}>Eff. Loss</th>
                         <th style={thS}>Wins</th>
                       </tr></thead>
                       <tbody>
                         {sortedUsers.map((u,i)=>(
                           <tr key={u.id}>
-                            <td style={{...tdS,color:C.muted,width:32}}>{i+1}</td>
+                            <td style={{...tdS,color:C.muted,width:28}}>{i+1}</td>
                             <td style={{...tdS,fontWeight:500}}>{u.name}</td>
                             <td style={tdS}>
                               {isAdmin
                                 ?<Stepper value={u.losses||0} onChange={v=>updateWL(u.id,"losses",v)}/>
                                 :<span style={{color:C.accent2,fontWeight:600}}>{u.losses||0}</span>}
+                            </td>
+                            <td style={{...tdS,textAlign:"center"}}>
+                              <span style={{color:C.accent,fontWeight:600}}>{sitoutMap[u.id]||0}</span>
+                            </td>
+                            <td style={{...tdS,textAlign:"center"}}>
+                              {(()=>{
+                                const eff=effectiveLosses(u,sitoutMap);
+                                return <span style={{color:"#fb923c",fontWeight:700,fontSize:15}}>{eff%1===0?eff:eff.toFixed(1)}</span>;
+                              })()}
                             </td>
                             <td style={tdS}>
                               {isAdmin
@@ -633,7 +651,7 @@ function App(){
                             </td>
                           </tr>
                         ))}
-                        {sortedUsers.length===0&&<tr><td colSpan={4} style={{...tdS,color:C.muted,textAlign:"center",padding:20}}>No players.</td></tr>}
+                        {sortedUsers.length===0&&<tr><td colSpan={6} style={{...tdS,color:C.muted,textAlign:"center",padding:20}}>No players.</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -729,6 +747,7 @@ function App(){
                     qualData={season.qualData}
                     onSaveQual={saveQualData}
                     isAdmin={isAdmin}
+                    sitoutMap={sitoutMap}
                   />
                 )}
               </div>
