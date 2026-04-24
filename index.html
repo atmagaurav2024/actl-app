@@ -279,9 +279,11 @@ function HighestScoreCard({ isAdmin, highestScore, onSave }) {
   },[highestScore?.player, highestScore?.points]);
 
   const saveHS = async () => {
-    await onSave(hsPlayer, hsPoints);
-    setHsSaved(true);
-    setTimeout(()=>setHsSaved(false), 2000);
+    const ok = await onSave(hsPlayer, hsPoints);
+    if(ok !== false){
+      setHsSaved(true);
+      setTimeout(()=>setHsSaved(false), 2000);
+    }
   };
 
   return (
@@ -557,16 +559,13 @@ function App(){
   };
   const updateHighestScore=async(playerVal,pointsVal)=>{
     const updated={player:playerVal||"",points:pointsVal||""};
-    // use maybeSingle() so it returns null instead of error when no row exists
-    const {data:existing} = await sb.from("highest_score").select("id").eq("season_id",selSeason).maybeSingle();
-    if(existing){
-      await sb.from("highest_score").update(updated).eq("id",existing.id);
-    } else {
-      await sb.from("highest_score").insert({season_id:selSeason,...updated});
-    }
-    // optimistic update
+    const {data,error} = await sb.from("highest_score")
+      .upsert({season_id:selSeason,...updated},{onConflict:"season_id"})
+      .select().single();
+    if(error){ alert("Save failed: "+error.message); return false; }
     setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
     setFrozenContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
+    return true;
   };
 
   const deleteCERow=async(ceId)=>{
