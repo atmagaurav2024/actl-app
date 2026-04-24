@@ -268,10 +268,12 @@ function QualifierTab({ users, seasonId, qualData, onSaveQual, isAdmin, sitoutMa
 }
 
 /* ── login ── */
-function HighestScoreCard({ isAdmin, highestScore, onSave }) {
+function HighestScoreCard({ isAdmin, highestScore, onSave, users }) {
   const [hsPlayer, setHsPlayer] = React.useState(highestScore?.player||"");
   const [hsPoints, setHsPoints] = React.useState(highestScore?.points||"");
+  const [hsSaving, setHsSaving] = React.useState(false);
   const [hsSaved, setHsSaved] = React.useState(false);
+  const [hsError, setHsError] = React.useState("");
 
   React.useEffect(()=>{
     setHsPlayer(highestScore?.player||"");
@@ -279,12 +281,19 @@ function HighestScoreCard({ isAdmin, highestScore, onSave }) {
   },[highestScore?.player, highestScore?.points]);
 
   const saveHS = async () => {
+    if(!hsPlayer){ setHsError("Please select a player"); return; }
+    if(!hsPoints){ setHsError("Please enter points"); return; }
+    setHsError("");
+    setHsSaving(true);
     const ok = await onSave(hsPlayer, hsPoints);
+    setHsSaving(false);
     if(ok !== false){
       setHsSaved(true);
       setTimeout(()=>setHsSaved(false), 2000);
     }
   };
+
+  const selStyle = {background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"10px 12px",borderRadius:8,fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",appearance:"none",WebkitAppearance:"none"};
 
   return (
     <div style={{marginBottom:24}}>
@@ -294,39 +303,42 @@ function HighestScoreCard({ isAdmin, highestScore, onSave }) {
           <>
             <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:10}}>
               <div style={{flex:2}}>
-                <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Player Name</div>
-                <input
-                  style={{background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"10px 12px",borderRadius:8,fontSize:15,width:"100%",outline:"none",boxSizing:"border-box"}}
-                  value={hsPlayer}
-                  onChange={e=>setHsPlayer(e.target.value)}
-                  placeholder="Player name"
-                />
+                <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Player</div>
+                <select style={selStyle} value={hsPlayer} onChange={e=>{ setHsPlayer(e.target.value); setHsError(""); }}>
+                  <option value="">— Select player —</option>
+                  {(users||[]).map(u=>(
+                    <option key={u.id} value={u.name}>{u.name}</option>
+                  ))}
+                </select>
               </div>
               <div style={{flex:1}}>
                 <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Points</div>
                 <input
-                  style={{background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"10px 12px",borderRadius:8,fontSize:15,width:"100%",outline:"none",boxSizing:"border-box"}}
+                  style={selStyle}
                   value={hsPoints}
-                  onChange={e=>setHsPoints(e.target.value)}
+                  onChange={e=>{ setHsPoints(e.target.value); setHsError(""); }}
                   placeholder="e.g. 1420"
                   type="number"
+                  inputMode="numeric"
                 />
               </div>
             </div>
+            {hsError && <div style={{color:C.accent2,fontSize:12,marginBottom:8}}>{hsError}</div>}
             <button
               onClick={saveHS}
-              style={{width:"100%",background:hsSaved?C.green:C.accent,color:"#000",border:"none",borderRadius:8,padding:"10px",fontWeight:600,fontSize:14,cursor:"pointer",transition:"background .3s"}}
-            >{hsSaved?"✓ Saved!":"Save"}</button>
+              disabled={hsSaving}
+              style={{width:"100%",background:hsSaved?C.green:hsSaving?"#334155":C.accent,color:hsSaved||hsSaving?"#fff":"#000",border:"none",borderRadius:8,padding:"12px",fontWeight:600,fontSize:15,cursor:hsSaving?"default":"pointer",transition:"background .3s"}}
+            >{hsSaved?"✓ Saved!":hsSaving?"Saving…":"Save"}</button>
           </>
         ) : (
           <div style={{display:"flex",gap:10,alignItems:"center"}}>
             <div style={{flex:2}}>
-              <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Player Name</div>
+              <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Player</div>
               <div style={{fontSize:15,fontWeight:600,color:C.text}}>{highestScore?.player||"—"}</div>
             </div>
             <div style={{flex:1}}>
               <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Points</div>
-              <div style={{fontSize:15,fontWeight:700,color:C.accent}}>{highestScore?.points||"—"}</div>
+              <div style={{fontSize:18,fontWeight:700,color:C.accent}}>{highestScore?.points||"—"}</div>
             </div>
           </div>
         )}
@@ -558,26 +570,22 @@ function App(){
     setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,closestEscape:s.stats.closestEscape.map(e=>e.id===ceId?{...e,entry:val}:e)}})}));
   };
   const updateHighestScore=async(playerVal,pointsVal)=>{
-    const updated={player:playerVal||"",points:pointsVal||""};
-    try {
-      // step 1: check if row exists
-      const {data:rows,error:selErr} = await sb.from("highest_score").select("id").eq("season_id",selSeason);
-      if(selErr){ alert("Select error: "+selErr.message); return false; }
-
-      if(rows && rows.length>0){
-        // update
-        const {error:upErr} = await sb.from("highest_score").update({player:updated.player,points:updated.points}).eq("id",rows[0].id);
-        if(upErr){ alert("Update error: "+upErr.message); return false; }
-      } else {
-        // insert
-        const {error:insErr} = await sb.from("highest_score").insert({season_id:selSeason,player:updated.player,points:updated.points});
-        if(insErr){ alert("Insert error: "+insErr.message); return false; }
-      }
-      // optimistic local update
-      setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
-      setFrozenContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
-      return true;
-    } catch(e){ alert("Exception: "+e.message); return false; }
+    const updated={player:playerVal,points:String(pointsVal)};
+    const sid=selSeason;
+    const {data:rows,error:selErr}=await sb.from("highest_score").select("id").eq("season_id",sid);
+    if(selErr){ alert("DB error: "+selErr.message); return false; }
+    let saveError=null;
+    if(rows&&rows.length>0){
+      const {error}=await sb.from("highest_score").update(updated).eq("id",rows[0].id);
+      saveError=error;
+    } else {
+      const {error}=await sb.from("highest_score").insert({season_id:sid,...updated});
+      saveError=error;
+    }
+    if(saveError){ alert("Save error: "+saveError.message); return false; }
+    setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==sid?s:{...s,stats:{...s.stats,highestScore:updated}})}));
+    setFrozenContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==sid?s:{...s,stats:{...s.stats,highestScore:updated}})}));
+    return true;
   };
 
   const deleteCERow=async(ceId)=>{
@@ -801,6 +809,7 @@ function App(){
                       isAdmin={isAdmin}
                       highestScore={season.stats?.highestScore}
                       onSave={updateHighestScore}
+                      users={season.users}
                     />
 
                     <div>
