@@ -452,11 +452,35 @@ function App(){
     setRefreshing(false);
   },[fetchAll]);
 
-  // freeze display data whenever contests updates (from fetchAll)
-  // but only apply to frozenContests — display reads from frozenContests
+  // On manual/auto refresh: update frozenContests fully (re-sort order too)
   useEffect(()=>{
-    if(contests.length>0||lastRefresh) setFrozenContests(contests);
+    if(lastRefresh) setFrozenContests(contests);
   },[lastRefresh]);
+
+  // On any contests change (optimistic updates): sync non-order data into frozenContests
+  // but preserve the existing user sort order
+  useEffect(()=>{
+    if(!lastRefresh) { setFrozenContests(contests); return; }
+    setFrozenContests(prev=>{
+      if(!prev||prev.length===0) return contests;
+      return contests.map(c=>{
+        const pc=prev.find(p=>p.id===c.id);
+        if(!pc) return c;
+        return {
+          ...c,
+          seasons:c.seasons.map(s=>{
+            const ps=pc.seasons?.find(p=>p.id===s.id);
+            if(!ps) return s;
+            // preserve user order from frozen, but update their values
+            const orderedUsers=ps.users.map(pu=>s.users.find(u=>u.id===pu.id)||pu);
+            // add any new users not in frozen order
+            const newUsers=s.users.filter(u=>!ps.users.find(pu=>pu.id===u.id));
+            return {...s, users:[...orderedUsers,...newUsers]};
+          })
+        };
+      });
+    });
+  },[contests]);
 
   // initial load
   useEffect(()=>{ if(role){ fetchAll().then(()=>setLastRefresh(new Date())); } },[role]);
