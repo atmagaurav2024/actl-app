@@ -557,9 +557,14 @@ function App(){
   };
   const updateHighestScore=async(playerVal,pointsVal)=>{
     const updated={player:playerVal||"",points:pointsVal||""};
-    const ex=await sb.from("highest_score").select("id").eq("season_id",selSeason).single();
-    if(ex.data) await sb.from("highest_score").update(updated).eq("season_id",selSeason);
-    else await sb.from("highest_score").insert({season_id:selSeason,...updated});
+    // use maybeSingle() so it returns null instead of error when no row exists
+    const {data:existing} = await sb.from("highest_score").select("id").eq("season_id",selSeason).maybeSingle();
+    if(existing){
+      await sb.from("highest_score").update(updated).eq("id",existing.id);
+    } else {
+      await sb.from("highest_score").insert({season_id:selSeason,...updated});
+    }
+    // optimistic update
     setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
     setFrozenContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
   };
@@ -571,8 +576,8 @@ function App(){
 
   /* qualifier */
   const saveQualData=async(data)=>{
-    const ex=await sb.from("qualifier_data").select("id").eq("season_id",selSeason).single();
-    if(ex.data) await sb.from("qualifier_data").update({data}).eq("season_id",selSeason);
+    const {data:existing}=await sb.from("qualifier_data").select("id").eq("season_id",selSeason).maybeSingle();
+    if(existing) await sb.from("qualifier_data").update({data}).eq("id",existing.id);
     else await sb.from("qualifier_data").insert({season_id:selSeason,data});
     await fetchAll();
   };
