@@ -268,6 +268,71 @@ function QualifierTab({ users, seasonId, qualData, onSaveQual, isAdmin, sitoutMa
 }
 
 /* ── login ── */
+function HighestScoreCard({ isAdmin, highestScore, onSave }) {
+  const [hsPlayer, setHsPlayer] = React.useState(highestScore?.player||"");
+  const [hsPoints, setHsPoints] = React.useState(highestScore?.points||"");
+  const [hsSaved, setHsSaved] = React.useState(false);
+
+  React.useEffect(()=>{
+    setHsPlayer(highestScore?.player||"");
+    setHsPoints(highestScore?.points||"");
+  },[highestScore?.player, highestScore?.points]);
+
+  const saveHS = async () => {
+    await onSave(hsPlayer, hsPoints);
+    setHsSaved(true);
+    setTimeout(()=>setHsSaved(false), 2000);
+  };
+
+  return (
+    <div style={{marginBottom:24}}>
+      <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:15,fontWeight:700,color:C.accent,marginBottom:10}}>Highest Score of the Season</div>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:"12px 14px"}}>
+        {isAdmin ? (
+          <>
+            <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:10}}>
+              <div style={{flex:2}}>
+                <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Player Name</div>
+                <input
+                  style={{background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"10px 12px",borderRadius:8,fontSize:15,width:"100%",outline:"none",boxSizing:"border-box"}}
+                  value={hsPlayer}
+                  onChange={e=>setHsPlayer(e.target.value)}
+                  placeholder="Player name"
+                />
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Points</div>
+                <input
+                  style={{background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"10px 12px",borderRadius:8,fontSize:15,width:"100%",outline:"none",boxSizing:"border-box"}}
+                  value={hsPoints}
+                  onChange={e=>setHsPoints(e.target.value)}
+                  placeholder="e.g. 1420"
+                  type="number"
+                />
+              </div>
+            </div>
+            <button
+              onClick={saveHS}
+              style={{width:"100%",background:hsSaved?C.green:C.accent,color:"#000",border:"none",borderRadius:8,padding:"10px",fontWeight:600,fontSize:14,cursor:"pointer",transition:"background .3s"}}
+            >{hsSaved?"✓ Saved!":"Save"}</button>
+          </>
+        ) : (
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <div style={{flex:2}}>
+              <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Player Name</div>
+              <div style={{fontSize:15,fontWeight:600,color:C.text}}>{highestScore?.player||"—"}</div>
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Points</div>
+              <div style={{fontSize:15,fontWeight:700,color:C.accent}}>{highestScore?.points||"—"}</div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function LoginPage({ onLogin }){
   const [mode,setMode]=useState(null);
   const [user,setUser]=useState(""); const [pass,setPass]=useState(""); const [err,setErr]=useState("");
@@ -716,63 +781,12 @@ function App(){
                     </div>
 
                     {/* Highest Score of the Season */}
-                    {(()=>{
-                      const [hsPlayer,setHsPlayer]=React.useState(season.stats?.highestScore?.player||"");
-                      const [hsPoints,setHsPoints]=React.useState(season.stats?.highestScore?.points||"");
-                      const [hsSaved,setHsSaved]=React.useState(false);
-                      const saveHS=async()=>{
-                        await updateHighestScore("player",hsPlayer,"points",hsPoints);
-                        setHsSaved(true);
-                        setTimeout(()=>setHsSaved(false),2000);
-                      };
-                      return (
-                        <div style={{marginBottom:24}}>
-                          <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:15,fontWeight:700,color:C.accent,marginBottom:10}}>Highest Score of the Season</div>
-                          <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:"12px 14px"}}>
-                            {isAdmin ? (
-                              <>
-                                <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:10}}>
-                                  <div style={{flex:2}}>
-                                    <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Player Name</div>
-                                    <input
-                                      style={{background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"10px 12px",borderRadius:8,fontSize:15,width:"100%",outline:"none",boxSizing:"border-box"}}
-                                      value={hsPlayer}
-                                      onChange={e=>setHsPlayer(e.target.value)}
-                                      placeholder="Player name"
-                                    />
-                                  </div>
-                                  <div style={{flex:1}}>
-                                    <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Points</div>
-                                    <input
-                                      style={{background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"10px 12px",borderRadius:8,fontSize:15,width:"100%",outline:"none",boxSizing:"border-box"}}
-                                      value={hsPoints}
-                                      onChange={e=>setHsPoints(e.target.value)}
-                                      placeholder="e.g. 1420"
-                                      type="number"
-                                    />
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={saveHS}
-                                  style={{width:"100%",background:hsSaved?C.green:C.accent,color:"#000",border:"none",borderRadius:8,padding:"10px",fontWeight:600,fontSize:14,cursor:"pointer",transition:"background .3s"}}
-                                >{hsSaved?"✓ Saved!":"Save"}</button>
-                              </>
-                            ) : (
-                              <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                                <div style={{flex:2}}>
-                                  <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Player Name</div>
-                                  <div style={{fontSize:15,fontWeight:600,color:C.text}}>{season.stats?.highestScore?.player||"—"}</div>
-                                </div>
-                                <div style={{flex:1}}>
-                                  <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Points</div>
-                                  <div style={{fontSize:15,fontWeight:700,color:C.accent}}>{season.stats?.highestScore?.points||"—"}</div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()}
+                    <HighestScoreCard
+                      isAdmin={isAdmin}
+                      highestScore={season.stats?.highestScore}
+                      onSave={updateHighestScore}
+                    />
+
                     <div>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                         <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:15,fontWeight:700,color:C.accent}}>Closest Escape</div>
