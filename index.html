@@ -559,13 +559,25 @@ function App(){
   };
   const updateHighestScore=async(playerVal,pointsVal)=>{
     const updated={player:playerVal||"",points:pointsVal||""};
-    const {data,error} = await sb.from("highest_score")
-      .upsert({season_id:selSeason,...updated},{onConflict:"season_id"})
-      .select().single();
-    if(error){ alert("Save failed: "+error.message); return false; }
-    setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
-    setFrozenContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
-    return true;
+    try {
+      // step 1: check if row exists
+      const {data:rows,error:selErr} = await sb.from("highest_score").select("id").eq("season_id",selSeason);
+      if(selErr){ alert("Select error: "+selErr.message); return false; }
+
+      if(rows && rows.length>0){
+        // update
+        const {error:upErr} = await sb.from("highest_score").update({player:updated.player,points:updated.points}).eq("id",rows[0].id);
+        if(upErr){ alert("Update error: "+upErr.message); return false; }
+      } else {
+        // insert
+        const {error:insErr} = await sb.from("highest_score").insert({season_id:selSeason,player:updated.player,points:updated.points});
+        if(insErr){ alert("Insert error: "+insErr.message); return false; }
+      }
+      // optimistic local update
+      setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
+      setFrozenContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
+      return true;
+    } catch(e){ alert("Exception: "+e.message); return false; }
   };
 
   const deleteCERow=async(ceId)=>{
