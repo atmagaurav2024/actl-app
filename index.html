@@ -404,11 +404,8 @@ function App(){
   const [newPlayerName,setNewPlayerName]=useState("");
   const [editingPlayer,setEditingPlayer]=useState(null);
 
-  const [frozenContests,setFrozenContests]=useState([]);
-
   const isAdmin=role==="admin";
-  const displayContests=frozenContests.length>0?frozenContests:contests;
-  const contest=displayContests.find(c=>c.id===selContest);
+  const contest=contests.find(c=>c.id===selContest);
   const season=contest?.seasons?.find(s=>s.id===selSeason);
 
   const fetchAll=useCallback(async()=>{
@@ -435,6 +432,7 @@ function App(){
           milestoneTable:(mR||[]).filter(m=>m.season_id===s.id),
           closestEscape:(eR||[]).filter(e=>e.season_id===s.id),
           sitoutTable:(soR||[]).filter(o=>o.season_id===s.id),
+          highestScore:(()=>{const h=(hsR||[]).find(h=>h.season_id===s.id); return h?{player:h.player,points:h.points}:null;})(),
         }
       }))
     }));
@@ -444,6 +442,17 @@ function App(){
 
   const [refreshing,setRefreshing]=useState(false);
   const [lastRefresh,setLastRefresh]=useState(null);
+  const [frozenOrder,setFrozenOrder]=useState({});  // seasonId -> [userId, ...]
+
+  const freezeOrder=useCallback((cts,sm,mm)=>{
+    const newOrder={};
+    cts.forEach(c=>c.seasons?.forEach(s=>{
+      const sMap=(s.stats?.sitoutTable||[]).reduce((a,r)=>{a[r.player_id]=r.sitouts||0;return a;},{});
+      const mMap=(s.stats?.milestoneTable||[]).reduce((a,r)=>{a[r.player_id]=r.times||0;return a;},{});
+      newOrder[s.id]=sortUsers(s.users,sMap,mMap).map(u=>u.id);
+    }));
+    setFrozenOrder(newOrder);
+  },[]);
 
   const refresh=useCallback(async()=>{
     setRefreshing(true);
@@ -452,38 +461,13 @@ function App(){
     setRefreshing(false);
   },[fetchAll]);
 
-  // On manual/auto refresh: update frozenContests fully (re-sort order too)
+  // initial load + freeze order after fetch
   useEffect(()=>{
-    if(lastRefresh) setFrozenContests(contests);
+    if(role){ fetchAll().then(()=>setLastRefresh(new Date())); }
+  },[role]);
+  useEffect(()=>{
+    if(lastRefresh&&contests.length>0) freezeOrder(contests);
   },[lastRefresh]);
-
-  // On any contests change (optimistic updates): sync non-order data into frozenContests
-  // but preserve the existing user sort order
-  useEffect(()=>{
-    if(!lastRefresh) { setFrozenContests(contests); return; }
-    setFrozenContests(prev=>{
-      if(!prev||prev.length===0) return contests;
-      return contests.map(c=>{
-        const pc=prev.find(p=>p.id===c.id);
-        if(!pc) return c;
-        return {
-          ...c,
-          seasons:c.seasons.map(s=>{
-            const ps=pc.seasons?.find(p=>p.id===s.id);
-            if(!ps) return s;
-            // preserve user order from frozen, but update their values
-            const orderedUsers=ps.users.map(pu=>s.users.find(u=>u.id===pu.id)||pu);
-            // add any new users not in frozen order
-            const newUsers=s.users.filter(u=>!ps.users.find(pu=>pu.id===u.id));
-            return {...s, users:[...orderedUsers,...newUsers]};
-          })
-        };
-      });
-    });
-  },[contests]);
-
-  // initial load
-  useEffect(()=>{ if(role){ fetchAll().then(()=>setLastRefresh(new Date())); } },[role]);
 
   // auto-refresh every 5 minutes
   useEffect(()=>{
@@ -551,7 +535,6 @@ function App(){
     // optimistic update — update in-memory without re-sorting display
     const patch=(list)=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,users:s.users.map(u=>u.id===pid?{...u,[field]:v}:u)}))}));
     setContests(patch);
-    setFrozenContests(patch);
     await sb.from("players").update({[field]:v}).eq("id",pid);
   };
 
@@ -560,7 +543,6 @@ function App(){
     const v=Math.max(0,val);
     const patch=(list)=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,stats:{...s.stats,milestoneTable:s.stats.milestoneTable.map(m=>m.id===id?{...m,times:v}:m)}}))}));
     setContests(patch);
-    setFrozenContests(patch);
     await sb.from("milestone_table").update({times:v}).eq("id",id);
   };
 
@@ -579,7 +561,6 @@ function App(){
       if(newRow){
         const patch=(list)=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,stats:{...s.stats,sitoutTable:[...s.stats.sitoutTable,newRow]}}))}));
         setContests(patch);
-        setFrozenContests(patch);
       }
     }
   };
@@ -592,6 +573,9 @@ function App(){
   const updateCE=async(ceId,val)=>{
     await sb.from("closest_escape").update({entry:val}).eq("id",ceId);
     setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,closestEscape:s.stats.closestEscape.map(e=>e.id===ceId?{...e,entry:val}:e)}})}));
+  };
+  const updateHighestScoreLocal=(updated)=>{
+    setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
   };
   const updateHighestScore=async(playerVal,pointsVal)=>{
     const updated={player:playerVal,points:String(pointsVal)};
@@ -607,8 +591,7 @@ function App(){
       saveError=error;
     }
     if(saveError){ alert("Save error: "+saveError.message); return false; }
-    setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==sid?s:{...s,stats:{...s.stats,highestScore:updated}})}));
-    setFrozenContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==sid?s:{...s,stats:{...s.stats,highestScore:updated}})}));
+    updateHighestScoreLocal(updated);
     return true;
   };
 
@@ -627,8 +610,8 @@ function App(){
 
   /* rulebook */
   const saveRules=async(text)=>{
-    const ex=await sb.from("rulebook").select("id").limit(1).single();
-    if(ex.data) await sb.from("rulebook").update({content:text}).eq("id",ex.data.id);
+    const {data:rows}=await sb.from("rulebook").select("id").limit(1);
+    if(rows&&rows.length>0) await sb.from("rulebook").update({content:text}).eq("id",rows[0].id);
     else await sb.from("rulebook").insert({content:text});
     setRules(text); setShowRules(false); await fetchAll();
   };
@@ -639,7 +622,15 @@ function App(){
   // sitout map: player_id -> sitouts count
   const sitoutMap=season?(season.stats?.sitoutTable||[]).reduce((acc,r)=>{acc[r.player_id]=r.sitouts||0;return acc;},{}):{}; 
   const milestoneMap=season?(season.stats?.milestoneTable||[]).reduce((acc,r)=>{acc[r.player_id]=r.times||0;return acc;},{}):{}; 
-  const sortedUsers=season?sortUsers(season.users,sitoutMap,milestoneMap):[];
+  // use frozenOrder for stable rankings — only re-sorts on Refresh
+  const sortedUsers=season?(()=>{
+    const order=frozenOrder[selSeason];
+    if(!order||order.length===0) return sortUsers(season.users,sitoutMap,milestoneMap);
+    const byId=Object.fromEntries(season.users.map(u=>[u.id,u]));
+    const ordered=order.map(id=>byId[id]).filter(Boolean);
+    const newOnes=season.users.filter(u=>!order.includes(u.id));
+    return [...ordered,...newOnes];
+  })():[];
 
   // milestone: descending by times
   const sortedMilestone=season?[...(season.stats?.milestoneTable||[])].sort((a,b)=>(b.times||0)-(a.times||0)):[];
@@ -695,8 +686,8 @@ function App(){
                 {isAdmin&&<button style={{background:C.accent,color:"#000",border:"none",borderRadius:8,padding:"8px 16px",fontSize:14,fontWeight:600,cursor:"pointer"}} onClick={()=>setShowCC(true)}>+ Create Contest</button>}
               </div>
               <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:6}}>
-                {displayContests.length===0&&<div style={{color:C.muted,fontSize:14,padding:"14px 0"}}>No contests yet.{isAdmin?" Create one!":""}</div>}
-                {displayContests.map(c=>(
+                {contests.length===0&&<div style={{color:C.muted,fontSize:14,padding:"14px 0"}}>No contests yet.{isAdmin?" Create one!":""}</div>}
+                {contests.map(c=>(
                   <div key={c.id} onClick={()=>{setSelContest(c.id);setSelSeason(null);}} style={{minWidth:160,background:selContest===c.id?"#1c2416":C.card,border:`1px solid ${selContest===c.id?C.accent:C.border}`,borderRadius:12,padding:"14px 16px",cursor:"pointer",flexShrink:0}}>
                     <div style={{fontSize:15,fontWeight:600,marginBottom:4}}>{c.name}</div>
                     <div style={{fontSize:12,color:C.muted}}>{c.seasons?.length||0} season{c.seasons?.length!==1?"s":""}</div>
