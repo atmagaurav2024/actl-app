@@ -50,13 +50,21 @@ function effectiveLosses(user, sitoutMap){
   return (user.losses||0) + (sitoutMap ? (sitoutMap[user.id]||0) : 0) * 0.5;
 }
 
-function sortUsers(users,sitoutMap={}) {
+function sortUsers(users,sitoutMap={},milestoneMap={}) {
   return [...users].sort((a,b)=>{
+    // 1. Less effective losses (losses + sitouts*0.5)
     const la=effectiveLosses(a,sitoutMap);
     const lb=effectiveLosses(b,sitoutMap);
     if(la!==lb) return la-lb;
+    // 2. More wins
     const wa=a.wins||0,wb=b.wins||0;
     if(wa!==wb) return wb-wa;
+    // 3. More times scored >1000
+    const ma=milestoneMap[a.id]||0, mb=milestoneMap[b.id]||0;
+    if(ma!==mb) return mb-ma;
+    // 4. Less sit outs
+    const sa=sitoutMap[a.id]||0, sb=sitoutMap[b.id]||0;
+    if(sa!==sb) return sa-sb;
     return a.name.localeCompare(b.name);
   });
 }
@@ -326,7 +334,7 @@ function App(){
 
   const fetchAll=useCallback(async()=>{
     setLoading(true);
-    const [{data:cR},{data:sR},{data:pR},{data:mR},{data:eR},{data:qR},{data:soR},{data:rR}]=await Promise.all([
+    const [{data:cR},{data:sR},{data:pR},{data:mR},{data:eR},{data:qR},{data:soR},{data:rR},{data:hsR}]=await Promise.all([
       sb.from("contests").select("*").order("created_at"),
       sb.from("seasons").select("*").order("created_at"),
       sb.from("players").select("*"),
@@ -335,6 +343,7 @@ function App(){
       sb.from("qualifier_data").select("*"),
       sb.from("sitout_table").select("*"),
       sb.from("rulebook").select("*").limit(1),
+      sb.from("highest_score").select("*"),
     ]);
     if(rR&&rR.length>0) setRules(rR[0].content||"");
     const built=(cR||[]).map(c=>({
@@ -481,6 +490,17 @@ function App(){
     await sb.from("closest_escape").update({entry:val}).eq("id",ceId);
     setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,closestEscape:s.stats.closestEscape.map(e=>e.id===ceId?{...e,entry:val}:e)}})}));
   };
+  const updateHighestScore=async(field,val)=>{
+    const current=season?.stats?.highestScore||{};
+    const updated={...current,[field]:val};
+    const ex=await sb.from("highest_score").select("id").eq("season_id",selSeason).single();
+    if(ex.data) await sb.from("highest_score").update({player:updated.player||"",points:updated.points||""}).eq("season_id",selSeason);
+    else await sb.from("highest_score").insert({season_id:selSeason,player:updated.player||"",points:updated.points||""});
+    // optimistic update
+    setContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
+    setFrozenContests(prev=>prev.map(c=>c.id!==selContest?c:{...c,seasons:c.seasons.map(s=>s.id!==selSeason?s:{...s,stats:{...s.stats,highestScore:updated}})}));
+  };
+
   const deleteCERow=async(ceId)=>{
     await sb.from("closest_escape").delete().eq("id",ceId);
     await fetchAll();
@@ -506,8 +526,9 @@ function App(){
 
   /* derived sorted lists */
   // sitout map: player_id -> sitouts count
-  const sitoutMap=season?(season.stats?.sitoutTable||[]).reduce((acc,r)=>{acc[r.player_id]=r.sitouts||0;return acc;},{}):{};
-  const sortedUsers=season?sortUsers(season.users,sitoutMap):[];
+  const sitoutMap=season?(season.stats?.sitoutTable||[]).reduce((acc,r)=>{acc[r.player_id]=r.sitouts||0;return acc;},{}):{}; 
+  const milestoneMap=season?(season.stats?.milestoneTable||[]).reduce((acc,r)=>{acc[r.player_id]=r.times||0;return acc;},{}):{}; 
+  const sortedUsers=season?sortUsers(season.users,sitoutMap,milestoneMap):[];
 
   // milestone: descending by times
   const sortedMilestone=season?[...(season.stats?.milestoneTable||[])].sort((a,b)=>(b.times||0)-(a.times||0)):[];
@@ -695,6 +716,43 @@ function App(){
                         </table>
                       </div>
                     </div>
+
+                    {/* Highest Score of the Season */}
+                    <div style={{marginBottom:24}}>
+                      <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:15,fontWeight:700,color:C.accent,marginBottom:10}}>Highest Score of the Season</div>
+                      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:"12px 14px"}}>
+                        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                          <div style={{flex:2}}>
+                            <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Player Name</div>
+                            {isAdmin ? (
+                              <input
+                                style={{background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"10px 12px",borderRadius:8,fontSize:15,width:"100%",outline:"none",boxSizing:"border-box"}}
+                                defaultValue={season.stats?.highestScore?.player||""}
+                                onBlur={e=>updateHighestScore("player",e.target.value)}
+                                placeholder="Player name"
+                              />
+                            ) : (
+                              <div style={{fontSize:15,fontWeight:600,color:C.text,padding:"10px 0"}}>{season.stats?.highestScore?.player||"—"}</div>
+                            )}
+                          </div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}}>Points</div>
+                            {isAdmin ? (
+                              <input
+                                style={{background:C.bg,border:`1px solid ${C.border}`,color:C.text,padding:"10px 12px",borderRadius:8,fontSize:15,width:"100%",outline:"none",boxSizing:"border-box"}}
+                                defaultValue={season.stats?.highestScore?.points||""}
+                                onBlur={e=>updateHighestScore("points",e.target.value)}
+                                placeholder="e.g. 1420"
+                                type="number"
+                              />
+                            ) : (
+                              <div style={{fontSize:15,fontWeight:700,color:C.accent,padding:"10px 0"}}>{season.stats?.highestScore?.points||"—"}</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     <div>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                         <div style={{fontFamily:"Rajdhani,sans-serif",fontSize:15,fontWeight:700,color:C.accent}}>Closest Escape</div>
