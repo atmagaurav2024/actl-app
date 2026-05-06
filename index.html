@@ -638,6 +638,7 @@ function App(){
   /* derived sorted lists */
   // sitout map: player_id -> sitouts count
   const sitoutMap=season?(season.stats?.sitoutTable||[]).reduce((acc,r)=>{acc[r.player_id]=r.sitouts||0;return acc;},{}):{}; 
+  const last10Map=season?(season.stats?.sitoutTable||[]).reduce((acc,r)=>{acc[r.player_id]=r.last10||0;return acc;},{}):{}; 
   const milestoneMap=season?(season.stats?.milestoneTable||[]).reduce((acc,r)=>{acc[r.player_id]=r.times||0;return acc;},{}):{}; 
   // use frozenOrder for stable rankings — only re-sorts on Refresh
   const sortedUsers=season?(()=>{
@@ -783,8 +784,12 @@ function App(){
                               {isAdmin ? (
                                 <div style={{display:"flex",flexDirection:"column",gap:2}}>
                                   <Stepper value={u.losses||0} onChange={v=>updateWL(u.id,"losses",v)}/>
-                                  {(sitoutMap[u.id]||0)>0 && (
-                                    <span style={{fontSize:10,color:C.accent}}>+{((sitoutMap[u.id]||0)*0.5).toFixed(1)}so</span>
+                                  {((sitoutMap[u.id]||0)>0||(last10Map[u.id]||0)>0) && (
+                                    <span style={{fontSize:10,color:C.accent}}>
+                                      {(sitoutMap[u.id]||0)>0 && `+${((sitoutMap[u.id]||0)*0.5).toFixed(1)}so`}
+                                      {(sitoutMap[u.id]||0)>0&&(last10Map[u.id]||0)>0 && " "}
+                                      {(last10Map[u.id]||0)>0 && `+${(last10Map[u.id]||0)}L10`}
+                                    </span>
                                   )}
                                 </div>
                               ) : (
@@ -792,8 +797,12 @@ function App(){
                                   <span style={{color:C.accent2,fontWeight:700,fontSize:15}}>
                                     {(()=>{const eff=effectiveLosses(u,sitoutMap);return eff%1===0?eff:eff.toFixed(1);})()}
                                   </span>
-                                  {(sitoutMap[u.id]||0)>0 && (
-                                    <span style={{fontSize:10,color:C.muted}}>+{((sitoutMap[u.id]||0)*0.5).toFixed(1)}so</span>
+                                  {((sitoutMap[u.id]||0)>0||(last10Map[u.id]||0)>0) && (
+                                    <span style={{fontSize:10,color:C.muted}}>
+                                      {(sitoutMap[u.id]||0)>0 && `+${((sitoutMap[u.id]||0)*0.5).toFixed(1)}so`}
+                                      {(sitoutMap[u.id]||0)>0&&(last10Map[u.id]||0)>0 && " "}
+                                      {(last10Map[u.id]||0)>0 && `+${(last10Map[u.id]||0)}L10`}
+                                    </span>
                                   )}
                                 </div>
                               )}
