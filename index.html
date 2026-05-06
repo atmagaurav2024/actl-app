@@ -549,16 +549,35 @@ function App(){
   /* sitout — upsert: create row if not yet in DB */
   const updateSitout=async(id,field,val,playerId)=>{
     const v=Math.max(0,val);
+
+    // if last10 changed, also update player losses by the delta
+    const adjustLosses=async(oldVal,newVal)=>{
+      if(field!=="last10") return;
+      const delta=newVal-oldVal;
+      if(delta===0) return;
+      // find current player losses
+      const player=season?.users?.find(u=>u.id===playerId);
+      if(!player) return;
+      const newLosses=Math.max(0,(player.losses||0)+delta);
+      setContests(list=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,users:s.users.map(u=>u.id===playerId?{...u,losses:newLosses}:u)}))})));
+      await sb.from("players").update({losses:newLosses}).eq("id",playerId);
+    };
+
     if(id){
+      // get old value for delta calculation
+      const oldRow=season?.stats?.sitoutTable?.find(o=>o.id===id);
+      const oldVal=oldRow?.[field]||0;
       setContests(list=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,stats:{...s.stats,sitoutTable:s.stats.sitoutTable.map(o=>o.id===id?{...o,[field]:v}:o)}}))})));
       const {error}=await sb.from("sitout_table").update({[field]:v}).eq("id",id);
-      if(error) alert("Sitout save error: "+error.message);
+      if(error){ alert("Sitout save error: "+error.message); return; }
+      await adjustLosses(oldVal,v);
     } else {
       const otherField=field==="sitouts"?"last10":"sitouts";
       const {data:newRow,error}=await sb.from("sitout_table").insert({season_id:selSeason,player_id:playerId,[field]:v,[otherField]:0}).select().single();
       if(error){ alert("Sitout insert error: "+error.message); return; }
       if(newRow){
         setContests(list=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,stats:{...s.stats,sitoutTable:[...s.stats.sitoutTable,newRow]}}))})));
+        await adjustLosses(0,v);
       }
     }
   };
