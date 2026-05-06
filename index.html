@@ -550,17 +550,15 @@ function App(){
   const updateSitout=async(id,field,val,playerId)=>{
     const v=Math.max(0,val);
     if(id){
-      // optimistic update
-      const patch=(list)=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,stats:{...s.stats,sitoutTable:s.stats.sitoutTable.map(o=>o.id===id?{...o,[field]:v}:o)}}))}));
-      setContests(patch);
-      setFrozenContests(patch);
-      await sb.from("sitout_table").update({[field]:v}).eq("id",id);
+      setContests(list=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,stats:{...s.stats,sitoutTable:s.stats.sitoutTable.map(o=>o.id===id?{...o,[field]:v}:o)}}))})));
+      const {error}=await sb.from("sitout_table").update({[field]:v}).eq("id",id);
+      if(error) alert("Sitout save error: "+error.message);
     } else {
       const otherField=field==="sitouts"?"last10":"sitouts";
-      const{data:newRow}=await sb.from("sitout_table").insert({season_id:selSeason,player_id:playerId,[field]:v,[otherField]:0}).select().single();
+      const {data:newRow,error}=await sb.from("sitout_table").insert({season_id:selSeason,player_id:playerId,[field]:v,[otherField]:0}).select().single();
+      if(error){ alert("Sitout insert error: "+error.message); return; }
       if(newRow){
-        const patch=(list)=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,stats:{...s.stats,sitoutTable:[...s.stats.sitoutTable,newRow]}}))}));
-        setContests(patch);
+        setContests(list=>list.map(c=>({...c,seasons:c.seasons.map(s=>({...s,stats:{...s.stats,sitoutTable:[...s.stats.sitoutTable,newRow]}}))})));
       }
     }
   };
